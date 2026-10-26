@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Did the upgrade work?</title>
+<meta name="description" content="Causal verification of upgrades and O&M interventions on wind turbines and PV systems from SCADA data: five methods validated with injected effects on open data, a test-plan calculator and real case studies.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --accent: #2a78d6; --good: #006300;
+  --warn-bg: #fff6e0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #3987e5; --good: #0ca30c;
+    --warn-bg: #2a2410;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --accent: #3987e5; --good: #0ca30c;
+  --warn-bg: #2a2410;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }
+header h1 { font-size: 30px; margin: 8px 0 4px; letter-spacing: -0.01em; }
+header p.lead { color: var(--ink2); max-width: 820px; margin: 0 0 12px; }
+nav { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 8px 0 20px; font-size: 14px; }
+nav a, a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 18px 14px; margin: 0 0 18px; }
+section h2 { font-size: 20px; margin: 0 0 6px; }
+section p { color: var(--ink2); margin: 6px 0 10px; max-width: 900px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 6px 0 4px; }
+.tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+.tile .v { font-size: 24px; font-weight: 600; }
+.tile .k { font-size: 13px; color: var(--ink2); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: end; margin: 8px 0 10px; }
+.controls label { font-size: 13px; color: var(--ink2); display: flex; flex-direction: column; gap: 3px; }
+select, input { font: inherit; font-size: 14px; color: var(--ink); background: var(--page); border: 1px solid var(--axis); border-radius: 6px; padding: 4px 8px; min-width: 120px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px; }
+.chart { min-height: 300px; }
+.chart.tall { min-height: 380px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink2); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink2); margin: 2px 0 4px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.rec { font-size: 16px; margin: 10px 0 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); }
+.rec b { color: var(--ink); }
+.note { font-size: 13px; color: var(--muted); }
+details summary { cursor: pointer; color: var(--accent); font-size: 14px; margin: 6px 0; }
+.scroll { overflow-x: auto; }
+footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+code { font-size: 13px; }
+</style>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" integrity="sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7" crossorigin="anonymous"></script>
+<script src="data.js"></script>
+</head>
+<body>
+<main>
+<header>
+  <h1>Did the upgrade work?</h1>
+  <p class="lead">Vortex generators, pitch and yaw software, blade repairs, panel washing or a new inverter promise +1 to +3 % more energy,
+  while the weather moves output by far more than that. This page compares five causal methods for measuring such effects from
+  SCADA data against a group of untouched control units, validated by injecting known effects into real data from an open wind
+  farm (Kelmarsh, 6 turbines, 2016-2021) and an open PV site (NREL PVDAQ, four roof systems in Las Vegas, 2016-2018).</p>
+  <nav><a href="#compare">Method comparison</a><a href="#power">Power curves</a><a href="#calc">Test-plan calculator</a>
+  <a href="#spill">Wake spillover</a><a href="#cases">Case studies</a><a href="#about">Methods and sources</a>
+  <a href="https://github.com/kwwaleszczynski-del/res-uplift-verification">Code on GitHub</a></nav>
+  <div class="tiles" id="tiles"></div>
+</header>
+
+<section id="compare">
+  <h2>Method comparison on injected effects</h2>
+  <p>Each trial takes a real test unit at a random date, a random set of controls and a known injected effect; every method then
+  estimates the effect over a post-period window. A good method has low error, intervals that contain the truth as often as they
+  claim (dashed line), and rarely reports a "success" (lower 90 % bound above zero) when nothing was done (dashed line at 5 %).</p>
+  <div class="controls">
+    <label>Technology <select id="cmp-tech"></select></label>
+    <label>Effect shape <select id="cmp-kind"></select></label>
+    <label>Control units <select id="cmp-j"></select></label>
+  </div>
+  <div class="legend" id="cmp-legend"></div>
+  <div class="charts">
+    <div class="chart" id="cmp-rmse"></div>
+    <div class="chart" id="cmp-cov"></div>
+    <div class="chart" id="cmp-fsr"></div>
+  </div>
+  <details><summary>Table view</summary><div class="scroll" id="cmp-table"></div></details>
+</section>
+
+<section id="power">
+  <h2>Power: how often a real uplift is detected</h2>
+  <p>Share of trials in which the method's lower 90 % bound is above zero, for the injected effect size chosen below. For the
+  partial-load shape the realised energy uplift is smaller than the injected partial-load uplift; the title shows the mean realised value.</p>
+  <div class="controls">
+    <label>Technology <select id="pow-tech"></select></label>
+    <label>Effect shape <select id="pow-kind"></select></label>
+    <label>Control units <select id="pow-j"></select></label>
+    <label>Injected effect <select id="pow-size"></select></label>
+  </div>
+  <div class="legend" id="pow-legend"></div>
+  <div class="chart tall" id="pow-chart"></div>
+</section>
+
+<section id="calc">
+  <h2>Test-plan calculator</h2>
+  <p>How long after an intervention must data be collected to show an expected energy uplift? For a uniform effect every method
+  here is scale-equivariant, so the chance that the lower 90 % bound ends above zero for any effect follows exactly from the
+  zero-effect trials. Only windows in which the method stayed honest count: false-success rate at zero effect at most 10 % and
+  90 % coverage at least 80 %. For a partial-load upgrade (vortex generators), enter the expected <i>energy</i> gain, which is
+  smaller than the gain in partial load.</p>
+  <div class="controls">
+    <label>Technology <select id="calc-tech"></select></label>
+    <label>Control units <select id="calc-j"></select></label>
+    <label>Expected energy uplift (%) <input id="calc-delta" type="number" min="0.2" max="10" step="0.1" value="2"></label>
+    <label>Target power <select id="calc-target"><option value="0.8">80 %</option><option value="0.9" selected>90 %</option><option value="0.95">95 %</option></select></label>
+    <label>Weekly ratio scatter (%) <input id="calc-noise" type="number" min="0.2" max="30" step="0.1"></label>
+  </div>
+  <p class="note" id="calc-noise-note"></p>
+  <div class="rec" id="calc-rec"></div>
+  <div class="scroll" id="calc-table"></div>
+  <p class="note">Weekly ratio scatter: standard deviation of the weekly log ratio of test to control energy in the year before the
+  intervention (in %). It scales the error spread and interval width linearly; leave the reference value if unknown. Results are
+  extrapolated from two sites and a limited number of trials - treat them as an order of magnitude for planning, not as a guarantee.</p>
+</section>
+
+<section id="spill">
+  <h2>Wake spillover: when a control stands in the test turbine's wake</h2>
+  <p>An upgrade that makes the test turbine extract more energy also slows the wind behind it. A control in that wake then loses
+  power, the counterfactual drops and the effect is overestimated. Here the injected partial-load uplift raises the test turbine's
+  thrust by the same fraction and a Gaussian wake model (Bastankhah &amp; Porte-Agel 2014) lowers the power of downstream controls.
+  Removing the IEC 61400-12-1 disturbed sectors (directions with a control in the test turbine's wake) removes the bias by construction,
+  at the cost of data: the right chart shows how much wider the intervals get.</p>
+  <div class="controls">
+    <label>Window <select id="sp-weeks"></select></label>
+  </div>
+  <div class="legend" id="sp-legend"></div>
+  <div class="charts">
+    <div class="chart" id="sp-all"></div>
+    <div class="chart" id="sp-one"></div>
+  </div>
+</section>
+
+<section id="cases">
+  <h2>Case studies on real events</h2>
+  <p>Long service stops from the Kelmarsh status logs and multi-week inverter outages in the PVDAQ data. None of them was meant to raise
+  output; the question is whether the unit came back as good as before. The grey band in the table is the 5-95 % range that the same
+  method produced for the same unit at random dates with no intervention (zero-effect trials) - an estimate inside it is not evidence of a change.</p>
+  <div class="controls">
+    <label>Event <select id="case-id"></select></label>
+    <label>Window <select id="case-weeks"></select></label>
+  </div>
+  <div class="chart tall" id="case-series"></div>
+  <div class="charts">
+    <div class="chart" id="case-forest"></div>
+    <div class="scroll" id="case-table"></div>
+  </div>
+</section>
+
+<section id="about">
+  <h2>Methods and sources</h2>
+  <p><b>Test-control bins</b>: industry practice for side-by-side upgrade tests - the pre-period ratio of test to control energy in bins
+  of the controls' wind speed and direction (PV: irradiance and sun azimuth) predicts the post-period test energy
+  (Hwangbo et al. 2017; Ding 2019, ch. 7; binning after IEC 61400-12-1); moving-block bootstrap over days.
+  <b>Synthetic control</b>: non-negative weights over the controls' daily energy (Abadie, Diamond &amp; Hainmueller 2010) with the
+  conformal inference of Chernozhukov, Wuethrich &amp; Zhu (2021): null-imposed refits and moving-block permutations.
+  <b>BSTS</b>: local level plus spike-and-slab regression on the controls and weather, Gibbs sampler, the CausalImpact approach
+  (Brodersen et al. 2015). <b>GBM counterfactual</b>: gradient boosted trees on the controls and weather, blocked cross-conformal
+  intervals for window totals (after Barber et al. 2021; Xu &amp; Xie 2021). <b>Difference-in-differences</b>: log energy ratio
+  before and after, moving-block bootstrap. <b>Naive</b>: the test unit against its own pre-period power curve (no controls).</p>
+  <p>Data: Kelmarsh wind farm data, C. Plumley (2022), Zenodo, CC BY 4.0. NREL PVDAQ public datasets, Deline et al. (2021),
+  OEDI doi:10.25984/1846021, CC BY 4.0. Assumptions behind every method: no spillover of the intervention onto the controls and a
+  stable relation between test and controls - both are tested above, and both fail sometimes in real data.</p>
+</section>
+<footer>Konrad Waleszczyński - <a href="https://github.com/kwwaleszczynski-del/res-uplift-verification">source, README and full results</a>. Code MIT; data CC BY 4.0 (sources above).</footer>
+</main>
+
+<script>
+const D = window.DATA;
+const M = Object.fromEntries(D.methods.map(m => [m.id, m]));
+const ORDER = D.methods.map(m => m.id);
+const TECH = {wind: "Wind (Kelmarsh)", pv: "PV (PVDAQ Las Vegas)"};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const dark = () => css("--surface").toLowerCase() === "#1a1a19";
+const color = id => dark() ? M[id].dark : M[id].light;
+const pct = (x, d = 1) => x == null || !isFinite(x) ? "-" : (100 * x).toFixed(d) + " %";
+const uniq = a => [...new Set(a)].sort((x, y) => x - y);
+
+function layout(title, xTitle, yTitle, extra = {}) {
+  return Object.assign({
+    title: {text: title, font: {size: 14, color: css("--ink")}, x: 0, xanchor: "left"},
+    paper_bgcolor: css("--surface"), plot_bgcolor: css("--surface"),
+    font: {family: 'system-ui, -apple-system, "Segoe UI", sans-serif', color: css("--ink2"), size: 12},
+    margin: {l: 56, r: 12, t: 40, b: 46}, hovermode: "x unified",
+    xaxis: {title: xTitle, gridcolor: css("--grid"), linecolor: css("--axis"), zeroline: false},
+    yaxis: {title: yTitle, gridcolor: css("--grid"), linecolor: css("--axis"), zeroline: false},
+    showlegend: false, legend: {orientation: "h", y: -0.2, font: {size: 11}},
+  }, extra);
+}
+const weeksAxis = w => ({type: "log", tickvals: w, ticktext: w.map(String), title: "weeks after the intervention",
+  gridcolor: css("--grid"), linecolor: css("--axis")});
+const CFG = {displayModeBar: false, responsive: true};
+
+function fill(sel, values, labels, keep) {
+  const el = document.getElementById(sel), prev = keep ?? el.value;
+  el.innerHTML = values.map((v, i) => `<option value="${v}">${labels ? labels[i] : v}</option>`).join("");
+  if (values.map(String).includes(String(prev))) el.value = prev;
+}
+const val = id => document.getElementById(id).value;
+
+function kindsFor(tech) { return uniq(D.summary.filter(r => r.tech === tech).map(r => r.kind)); }
+function jsFor(tech) { return uniq(D.summary.filter(r => r.tech === tech).map(r => r.n_controls)); }
+function setupTriple(prefix, onChange) {
+  fill(prefix + "-tech", ["wind", "pv"], ["Wind (Kelmarsh)", "PV (PVDAQ)"]);
+  const refresh = () => {
+    const t = val(prefix + "-tech");
+    fill(prefix + "-kind", kindsFor(t), kindsFor(t).map(k => D.kinds[k] || k), "uniform");
+    const js = jsFor(t);
+    fill(prefix + "-j", js, js.map(String), document.getElementById(prefix + "-j").value || js[js.length - 1]);
+    if (!document.getElementById(prefix + "-j").dataset.init) {
+      document.getElementById(prefix + "-j").value = js[js.length - 1];
+      document.getElementById(prefix + "-j").dataset.init = 1;
+    }
+    onChange();
+  };
+  document.getElementById(prefix + "-tech").onchange = refresh;
+  document.getElementById(prefix + "-kind").onchange = onChange;
+  document.getElementById(prefix + "-j").onchange = onChange;
+  refresh();
+}
+
+function sel(tech, kind, j) {
+  return D.summary.filter(r => r.tech === tech && r.kind === kind && r.n_controls === +j);
+}
+
+// ---------------- tiles
+function tiles() {
+  const cells = D.cells || [];
+  const best = (tech, delta, target) => {
+    const js = uniq(cells.filter(c => c.tech === tech).map(c => c.n_controls));
+    if (!js.length) return "-";
+    const r = recommend(tech, js[js.length - 1], delta, target, 1);
+    const maxW = Math.max(...r.cs.map(c => c.weeks));
+    return r.best ? `${r.need[r.best].toFixed(0)} weeks <span class="k">(${M[r.best].short})</span>` : `over ${maxW} weeks`;
+  };
+  document.getElementById("tiles").innerHTML = [
+    ["Wind, +2 % at 80 % power", best("wind", 0.02, 0.8)],
+    ["Wind, +2 % at 90 % power", best("wind", 0.02, 0.9)],
+    ["PV, +1 % at 90 % power", best("pv", 0.01, 0.9)],
+    ["PV, +2 % at 90 % power", best("pv", 0.02, 0.9)],
+  ].map(([k, v]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+// ---------------- comparison
+function drawCompare() {
+  const rows = sel(val("cmp-tech"), val("cmp-kind"), val("cmp-j"));
+  const weeks = uniq(rows.map(r => r.weeks));
+  const agg = (m, f) => weeks.map(w => {
+    const g = rows.filter(r => r.method === m && r.weeks === w), n = g.reduce((a, r) => a + r.n, 0);
+    return n ? f(g, n) : null;
+  });
+  const tr = (m, y, fmt) => ({x: weeks, y, name: M[m].short, mode: "lines+markers", line: {color: color(m), width: 2},
+    marker: {size: 8, color: color(m), line: {color: css("--surface"), width: 2}}, hovertemplate: fmt});
+  const rmse = ORDER.map(m => tr(m, agg(m, (g, n) => 100 * Math.sqrt(g.reduce((a, r) => a + r.n * r.rmse ** 2, 0) / n)), "%{y:.2f} pp"));
+  const cov = ORDER.map(m => tr(m, agg(m, (g, n) => 100 * g.reduce((a, r) => a + r.n * r.cover90, 0) / n), "%{y:.0f} %"));
+  const fsr = ORDER.map(m => tr(m, weeks.map(w => { const z = rows.find(r => r.method === m && r.weeks === w && r.size === 0); return z ? 100 * z.success : null; }), "%{y:.0f} %"));
+  const ref = y => ({type: "line", xref: "paper", x0: 0, x1: 1, y0: y, y1: y, line: {color: css("--ink2"), width: 1, dash: "dash"}});
+  Plotly.react("cmp-rmse", rmse, layout("Error (RMSE), percentage points", "", "RMSE (pp)", {xaxis: weeksAxis(weeks), yaxis: {type: "log", tickvals: [0.2, 0.5, 1, 2, 5, 10], ticktext: ["0.2", "0.5", "1", "2", "5", "10"], gridcolor: css("--grid"), title: "RMSE (pp)"}}), CFG);
+  Plotly.react("cmp-cov", cov, layout("90 % interval coverage", "", "coverage (%)", {xaxis: weeksAxis(weeks), yaxis: {range: [0, 103], gridcolor: css("--grid"), title: "coverage (%)"}, shapes: [ref(90)]}), CFG);
+  Plotly.react("cmp-fsr", fsr, layout("False 'success' at zero effect", "", "share of trials (%)", {xaxis: weeksAxis(weeks), yaxis: {rangemode: "tozero", gridcolor: css("--grid"), title: "share of trials (%)"}, shapes: [ref(5)]}), CFG);
+  const hdr = `<tr><th>Method</th><th>Weeks</th><th>Bias</th><th>RMSE</th><th>Cover 90</th><th>Cover 95</th><th>False success</th><th>Median half-width</th></tr>`;
+  const body = ORDER.flatMap(m => weeks.map(w => {
+    const g = rows.filter(r => r.method === m && r.weeks === w), n = g.reduce((a, r) => a + r.n, 0);
+    if (!n) return "";
+    const z = g.find(r => r.size === 0), s = (k) => g.reduce((a, r) => a + r.n * r[k], 0) / n;
+    return `<tr><td><span class="swatch" style="background:${color(m)}"></span>${M[m].short}</td><td>${w}</td><td>${pct(s("bias"), 2)}</td>` +
+      `<td>${pct(Math.sqrt(g.reduce((a, r) => a + r.n * r.rmse ** 2, 0) / n), 2)}</td><td>${pct(s("cover90"), 0)}</td><td>${pct(s("cover95"), 0)}</td>` +
+      `<td>${z ? pct(z.success, 0) : "-"}</td><td>${pct(s("half90_median"), 2)}</td></tr>`;
+  })).join("");
+  document.getElementById("cmp-table").innerHTML = `<table>${hdr}${body}</table>`;
+}
+
+// ---------------- power
+function drawPower() {
+  const rows = sel(val("pow-tech"), val("pow-kind"), val("pow-j"));
+  const sizes = uniq(rows.map(r => r.size)).filter(s => s > 0);
+  fill("pow-size", sizes, sizes.map(s => "+" + (100 * s).toFixed(1) + " %"), val("pow-size") || 0.02);
+  const s = +val("pow-size"), weeks = uniq(rows.map(r => r.weeks));
+  const g = rows.filter(r => Math.abs(r.size - s) < 1e-9);
+  const realised = g.length ? g.reduce((a, r) => a + r.true_mean, 0) / g.length : s;
+  const data = ORDER.map(m => ({x: weeks, y: weeks.map(w => { const r = g.find(x => x.method === m && x.weeks === w); return r ? 100 * r.success : null; }),
+    name: M[m].short, mode: "lines+markers", line: {color: color(m), width: 2}, marker: {size: 8, color: color(m), line: {color: css("--surface"), width: 2}},
+    hovertemplate: "%{y:.0f} %"}));
+  Plotly.react("pow-chart", data, layout(`Detected in % of trials - mean realised uplift ${pct(realised, 2)}`, "", "power (%)",
+    {xaxis: weeksAxis(weeks), yaxis: {range: [0, 103], gridcolor: css("--grid"), title: "power (%)"},
+     shapes: [{type: "line", xref: "paper", x0: 0, x1: 1, y0: 90, y1: 90, line: {color: css("--ink2"), width: 1, dash: "dash"}}]}), CFG);
+}
+
+// ---------------- calculator
+// Uniform effects: every method is scale-equivariant, so the success rate for an effect delta is the share of
+// zero-effect trials whose lower 90 % bound satisfies (1 + lo)(1 + delta) > 1 (exact for the simulated sizes).
+function power(c, delta, v) { const n = c.lo.length; if (!n) return NaN; let k = 0; for (const lo of c.lo) if ((1 + lo * v) * (1 + delta) > 1) k++; return k / n; }
+const trusted = c => c.fsr != null && c.fsr <= 0.10 && c.cover90 >= 0.80;
+function requiredWeeks(cs, delta, target, v) {
+  cs = cs.filter(trusted).sort((a, b) => a.weeks - b.weeks);
+  const p = cs.map(c => power(c, delta, v));
+  const k = p.findIndex(x => x >= target);
+  if (k < 0) return {weeks: Infinity, cell: null};
+  if (k === 0 || p[k] <= p[k - 1]) return {weeks: cs[k].weeks, cell: cs[k]};
+  const f = (target - p[k - 1]) / (p[k] - p[k - 1]);
+  return {weeks: Math.exp(Math.log(cs[k - 1].weeks) + f * (Math.log(cs[k].weeks) - Math.log(cs[k - 1].weeks))), cell: cs[k]};
+}
+function recommend(tech, j, delta, target, v) {
+  const cs = (D.cells || []).filter(c => c.tech === tech && c.n_controls === +j);
+  const need = {}, cell = {};
+  ORDER.forEach(m => { const r = requiredWeeks(cs.filter(c => c.method === m), delta, target, v); need[m] = r.weeks; cell[m] = r.cell; });
+  const cand = ORDER.filter(m => m !== "naive" && isFinite(need[m]));
+  const best = cand.length ? cand.reduce((a, b) => need[a] <= need[b] ? a : b) : null;
+  return {need, cell, best, cs};
+}
+function noiseRef(tech, j) {
+  const v = (D.cells || []).filter(c => c.tech === tech && c.n_controls === +j && c.noise_ref != null).map(c => c.noise_ref).sort((a, b) => a - b);
+  return v.length ? v[Math.floor(v.length / 2)] : null;
+}
+function setupCalc() {
+  fill("calc-tech", ["wind", "pv"], ["Wind (Kelmarsh)", "PV (PVDAQ)"]);
+  const refresh = () => {
+    const js = uniq((D.cells || []).filter(c => c.tech === val("calc-tech")).map(c => c.n_controls));
+    fill("calc-j", js, js.map(String), js[js.length - 1]);
+    document.getElementById("calc-j").value = js[js.length - 1];
+    drawCalc(true);
+  };
+  document.getElementById("calc-tech").onchange = refresh;
+  document.getElementById("calc-j").onchange = () => drawCalc(true);
+  refresh();
+}
+function drawCalc(resetNoise) {
+  const tech = val("calc-tech"), j = +val("calc-j");
+  const ref = noiseRef(tech, j), noiseEl = document.getElementById("calc-noise");
+  if (resetNoise || !noiseEl.value) noiseEl.value = ref ? ref.toFixed(1) : "";
+  document.getElementById("calc-noise-note").textContent = ref ? `Reference scatter in the trials (${TECH[tech]}, ${j} control${j > 1 ? "s" : ""}): ${ref.toFixed(1)} % - the median over the trials.` : "";
+  const v = ref ? (+noiseEl.value || ref) / ref : 1;
+  const delta = (+val("calc-delta")) / 100, target = +val("calc-target");
+  const r = recommend(tech, j, delta, target, v);
+  const maxW = Math.max(...r.cs.map(c => c.weeks));
+  const fmtW = w => !isFinite(w) ? `not within ${maxW} weeks` : w <= 2 ? "2 weeks or less" : `${w.toFixed(0)} weeks`;
+  document.getElementById("calc-rec").innerHTML = r.best
+    ? `Recommended: <b>${M[r.best].label}</b>, about <b>${fmtW(r.need[r.best])}</b> of post-intervention data (plus a year of pre-intervention data).`
+    : `No method with honest intervals reaches ${pct(target, 0)} power for +${(100 * delta).toFixed(1)} % within ${maxW} weeks. Add control units, accept lower power, or plan a longer test.`;
+  const ws = uniq(r.cs.map(c => c.weeks)).filter(w => w >= 8);
+  const hdr = `<tr><th>Method</th><th>Weeks needed</th><th>False success there</th><th>90 % coverage there</th><th>Power at ${ws.join(" / ")} weeks</th></tr>`;
+  const pw = m => ws.map(w => { const c = r.cs.find(x => x.method === m && x.weeks === w); return c ? pct(power(c, delta, v), 0) + (trusted(c) ? "" : "*") : "-"; }).join(" / ");
+  document.getElementById("calc-table").innerHTML = `<table>${hdr}${ORDER.map(m => `<tr><td><span class="swatch" style="background:${color(m)}"></span>${M[m].short}</td>` +
+    `<td>${fmtW(r.need[m])}</td><td>${r.cell[m] ? pct(r.cell[m].fsr, 0) : "-"}</td><td>${r.cell[m] ? pct(r.cell[m].cover90, 0) : "-"}</td><td>${pw(m)}</td></tr>`).join("")}</table>` +
+    `<p class="note">* window in which the method's intervals were not trustworthy (false-success rate above 10 % or coverage below 80 %); it does not count.</p>`;
+}
+
+// ---------------- spillover
+function drawSpill() {
+  if (!D.spill) return;
+  const weeks = uniq(D.spill.map(r => r.weeks));
+  fill("sp-weeks", weeks, weeks.map(w => w + " weeks"), val("sp-weeks") || 26);
+  const w = +val("sp-weeks"), js = uniq(D.spill.map(r => r.n_controls));
+  const methods = ORDER.filter(m => D.spill.some(r => r.method === m));
+  const labels = js.map(j => j === 1 ? "one control" : `all ${j} controls`);
+  const bars = (key, scale, fmt) => methods.map(m => ({type: "bar", name: M[m].short, marker: {color: color(m)}, x: labels,
+    y: js.map(j => { const r = D.spill.find(x => x.method === m && x.n_controls === j && x.weeks === w); return r ? scale(r[key]) : null; }),
+    hovertemplate: fmt}));
+  const opts = {barmode: "group", hovermode: "closest", bargap: 0.25, bargroupgap: 0.08};
+  Plotly.react("sp-all", bars("added_bias", v => 100 * v, "%{y:.1f} % of the effect"),
+    layout("Bias added by spillover (paired trials)", "", "% of the true effect", opts), CFG);
+  Plotly.react("sp-one", bars("width_ratio", v => v, "x %{y:.2f}"),
+    layout("Price of the sector filter: 90 % interval width, filtered / all records", "", "width ratio",
+      Object.assign({}, opts, {shapes: [{type: "line", xref: "paper", x0: 0, x1: 1, y0: 1, y1: 1, line: {color: css("--ink2"), width: 1, dash: "dash"}}]})), CFG);
+}
+
+// ---------------- cases
+function drawCase() {
+  if (!D.cases) return;
+  const ids = [...new Set(D.cases.map(c => c.case))];
+  fill("case-id", ids, ids.map(i => { const c = D.cases.find(x => x.case === i); return `${i}: ${c.label}`; }), val("case-id") || ids[0]);
+  const id = val("case-id"), rows = D.cases.filter(c => c.case === id), weeks = uniq(rows.map(r => r.weeks));
+  fill("case-weeks", weeks, weeks.map(w => w + " weeks"), val("case-weeks") || weeks[weeks.length - 1]);
+  const w = +val("case-weeks"), cur = rows.filter(r => r.weeks === w);
+  const s = (D.series || []).find(x => x.id === id);
+  if (s) {
+    const tr = (y, name, c, width) => ({x: s.date, y, name, mode: "lines", line: {color: c, width}, hovertemplate: "%{y:.0f} kW"});
+    Plotly.react("case-series", [tr(s.actual, `${s.unit} measured`, css("--ink"), 2), tr(s.ml, "GBM counterfactual", color("ml"), 2), tr(s.synth, "synthetic control", color("synth"), 2)],
+      layout(`${s.unit}: weekly mean power of valid records (counterfactuals before the event are out-of-sample)`, "", "mean power (kW)",
+        {showlegend: true, shapes: [{type: "rect", xref: "x", yref: "paper", x0: s.start.slice(0, 10), x1: s.end.slice(0, 10), y0: 0, y1: 1, fillcolor: css("--grid"), line: {width: 0}, opacity: 0.8}],
+         xaxis: {gridcolor: css("--grid"), linecolor: css("--axis")}}), CFG);
+  }
+  const ms = ORDER.filter(m => cur.some(r => r.method === m));
+  const data = [{type: "scatter", mode: "markers", x: ms.map(m => { const r = cur.find(x => x.method === m); return 100 * r.effect; }), y: ms.map(m => M[m].short),
+    marker: {size: 10, color: ms.map(color), line: {color: css("--surface"), width: 2}},
+    error_x: {type: "data", symmetric: false, array: ms.map(m => { const r = cur.find(x => x.method === m); return 100 * (r.hi90 - r.effect); }),
+      arrayminus: ms.map(m => { const r = cur.find(x => x.method === m); return 100 * (r.effect - r.lo90); }), color: css("--ink2"), thickness: 1.5, width: 0},
+    hovertemplate: "%{x:.1f} %<extra></extra>", showlegend: false}];
+  const shapes = ms.map((m, i) => { const r = cur.find(x => x.method === m); return r.placebo_p05 == null ? null :
+    {type: "rect", xref: "x", yref: "y", x0: 100 * r.placebo_p05, x1: 100 * r.placebo_p95, y0: i - 0.35, y1: i + 0.35, fillcolor: css("--grid"), line: {width: 0}, layer: "below"}; }).filter(Boolean);
+  shapes.push({type: "line", x0: 0, x1: 0, yref: "paper", y0: 0, y1: 1, line: {color: css("--axis"), width: 1}});
+  Plotly.react("case-forest", data, layout(`Estimated change after ${w} weeks, 90 % intervals (grey: placebo range)`, "change of energy (%)", "",
+    {shapes, hovermode: "closest", margin: {l: 150, r: 12, t: 40, b: 46}, xaxis: {range: [-15, 15], gridcolor: css("--grid"), title: "change of energy (%)"}, yaxis: {autorange: "reversed", gridcolor: css("--grid")}}), CFG);
+  const hdr = `<tr><th>Method</th><th>Estimate</th><th>90 % interval</th><th>95 % interval</th><th>Placebo 5-95 %</th></tr>`;
+  document.getElementById("case-table").innerHTML = `<table>${hdr}${ms.map(m => { const r = cur.find(x => x.method === m);
+    return `<tr><td><span class="swatch" style="background:${color(m)}"></span>${M[m].short}</td><td>${pct(r.effect)}</td><td>${pct(r.lo90)} .. ${pct(r.hi90)}</td><td>${pct(r.lo95)} .. ${pct(r.hi95)}</td>` +
+      `<td>${r.placebo_p05 == null ? "-" : pct(r.placebo_p05) + " .. " + pct(r.placebo_p95)}</td></tr>`; }).join("")}</table>` +
+    `<p class="note">${cur[0].n_controls} controls (${cur[0].controls}), ${cur[0].n_pre_days} valid days before, ${cur[0].n_post_days} after.</p>`;
+}
+
+function legend(id, methods) {
+  document.getElementById(id).innerHTML = methods.map(m => `<span><span class="swatch" style="background:${color(m)}"></span>${M[m].short}</span>`).join("");
+}
+function legends() { legend("cmp-legend", ORDER); legend("pow-legend", ORDER); legend("sp-legend", ORDER.filter(m => (D.spill || []).some(r => r.method === m))); }
+function drawAll() { legends(); tiles(); drawCompare(); drawPower(); drawCalc(false); drawSpill(); drawCase(); }
+setupTriple("cmp", drawCompare);
+setupTriple("pow", drawPower);
+setupCalc();
+["calc-delta", "calc-target", "calc-noise"].forEach(id => document.getElementById(id).oninput = () => drawCalc(false));
+document.getElementById("pow-size").onchange = drawPower;
+document.getElementById("sp-weeks").onchange = drawSpill;
+document.getElementById("case-id").onchange = () => { document.getElementById("case-weeks").value = ""; drawCase(); };
+document.getElementById("case-weeks").onchange = drawCase;
+legends(); tiles(); drawSpill(); drawCase();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawAll);
+</script>
+</body>
+</html>
