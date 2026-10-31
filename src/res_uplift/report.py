@@ -62,10 +62,13 @@ def _weeks_axis(ax, weeks):
     ax.minorticks_off()
 
 
-def _legend(fig, methods, ncol=6):
+def _legend(fig, methods, ncol=6, extra=()):
     handles = [plt.Line2D([], [], color=COLORS[m][0], marker="o", markersize=5, linewidth=1.8) for m in methods]
-    fig.legend(handles, [SHORT[m] for m in methods], loc="lower center", ncol=ncol, frameon=False, fontsize=8.5,
-               labelcolor=INK2)
+    labels = [SHORT[m] for m in methods]
+    for h, lab in extra:  # line styles that are not methods
+        handles.append(h)
+        labels.append(lab)
+    fig.legend(handles, labels, loc="lower center", ncol=ncol, frameon=False, fontsize=8.5, labelcolor=INK2)
 
 
 def max_controls(df: pd.DataFrame, tech: str) -> int:
@@ -92,7 +95,7 @@ def fig_method_comparison(summary: pd.DataFrame, out: Path) -> None:
             axes[r, 2].plot(fsr.index, 100 * fsr.values, **kw)
         name = "Wind (Kelmarsh, 5 controls)" if tech == "wind" else "PV (PVDAQ Las Vegas, all controls)"
         xlab = "post-period window (weeks)" if r == len(techs) - 1 else None
-        _style(axes[r, 0], f"{name}: error (RMSE)", xlab, "RMSE (% points)")
+        _style(axes[r, 0], f"{name}: RMSE", xlab, "RMSE (% points)")
         _style(axes[r, 1], "90 % interval coverage", xlab, "coverage (%)")
         _style(axes[r, 2], "false 'success' at zero effect", xlab, "share of trials (%)")
         axes[r, 1].axhline(90, color=INK2, linewidth=0.8, linestyle="--")
@@ -257,8 +260,12 @@ def fig_weeks(bounds: list[dict], out: Path) -> None:
             ax.set_ylim(0, 102)
             _style(ax, f"{'Wind' if tech == 'wind' else 'PV'}, {J} controls: +{delta:.0%}", "weeks",
                    "power (%)" if c == 0 and t == 0 else None)
-    _legend(fig, methods, ncol=5)
-    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    styles = [(plt.Line2D([], [], color=INK2, linewidth=1.0, linestyle=":"),
+               f"not trustworthy at that window (false success > {100 * planner.MAX_FSR:.0f} % or coverage "
+               f"< {100 * planner.MIN_COVER:.0f} %)"),
+              (plt.Line2D([], [], color=INK2, linewidth=0.8, linestyle="--"), "80 % and 90 % power")]
+    _legend(fig, methods, ncol=4, extra=styles)
+    fig.tight_layout(rect=(0, 0.15, 1, 1))
     fig.savefig(out, dpi=150)
     plt.close(fig)
 
