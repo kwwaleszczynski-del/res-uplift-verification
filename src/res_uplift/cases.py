@@ -42,7 +42,7 @@ CASES = [
     {"id": "A-2016", "tech": "pv", "unit": "A", "start": "2016-06-04", "end": "2016-07-08",
      "label": "Inverter failure, 34 days off, back after repair"},
     {"id": "B-2017", "tech": "pv", "unit": "B", "start": "2017-08-24", "end": "2017-09-25",
-     "label": "Inverter outage, 32 days"},
+     "label": "Inverter data gap, 32 days (error code 139)"},
     {"id": "D1-2017", "tech": "pv", "unit": "D1", "start": "2017-10-17", "end": "2017-12-05",
      "label": "Inverter 1 of building D out, 49 days"},
 ]

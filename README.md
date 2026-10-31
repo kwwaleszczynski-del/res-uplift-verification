@@ -24,7 +24,8 @@ everything to **real events from the logs**.
 
 * **Wind, five controls.** The gradient-boosting counterfactual with blocked cross-conformal intervals is the most
   precise method (RMSE 1.25 percentage points at 4 weeks, 0.54 at 52 weeks) and its false-success rate stays at
-  6-7 %. The industry test-control method is unbiased, but its bootstrap intervals are too narrow for tests shorter
+  6-7 %, but its 90 % intervals are a little too narrow: they cover the truth in 88 % of trials at 4 weeks and
+  only 82 % at 13 and 52 weeks. The industry test-control method is unbiased, but its bootstrap intervals are too narrow for tests shorter
   than half a year (15-29 % false successes for 2- to 13-week windows, 4 % at 52 weeks). Synthetic control with
   conformal inference is the best calibrated (90 % intervals cover the truth in 90-94 % of trials, 3-4 % false
   successes) but about four times less precise: a linear mix of daily energies cannot follow direction-dependent
@@ -314,7 +315,7 @@ a local level (BSTS) or a pre-period restricted to the weeks before the wash.
 | Low hydraulic pressure, 3.9 days down | T1-2021 | 13 wk | -0.2 (-0.4; +0.8) | -1.3 (-3.2; +0.2) | -0.5 (-3.9; +6.3) | +1.4 (-9.8; +15.2) | +1.9 (-2.3; +5.8) | -3.2 (-5.8; -1.8) |
 | Converter fault, then 11 days of on-site maintenance | T5-2021 | 4 wk | +0.5 (-0.8; +2.1) | -1.3 (-2.9; +0.7) | -0.3 (-8.0; +12.3) | +1.2 (-5.1; +8.7) | -0.6 (-3.7; +2.2) | +3.0 (+2.1; +3.6) |
 | Inverter failure, 34 days off, back after repair | A-2016 | 52 wk | -0.2 (-2.0; +0.3) | -0.7 (-1.3; +0.1) | -0.5 (-4.6; +1.4) | +1.2 (-3.3; +5.6) | -1.5 (-3.4; +0.3) | -2.5 (-4.0; -1.2) |
-| Inverter outage, 32 days | B-2017 | 52 wk | +1.0 (+0.6; +1.5) | +1.2 (+0.8; +1.6) | +0.7 (-0.6; +0.9) | -0.3 (-4.4; +4.1) | +1.3 (+0.8; +2.0) | -0.5 (-1.7; +0.8) |
+| Inverter data gap, 32 days (error code 139) | B-2017 | 52 wk | +1.0 (+0.6; +1.5) | +1.2 (+0.8; +1.6) | +0.7 (-0.6; +0.9) | -0.3 (-4.4; +4.1) | +1.3 (+0.8; +2.0) | -0.5 (-1.7; +0.8) |
 | Inverter 1 of building D out, 49 days | D1-2017 | 52 wk | -0.6 (-3.2; +0.5) | -1.0 (-2.0; -0.4) | -0.1 (-0.8; +3.1) | +5.9 (+0.2; +12.3) | -1.4 (-2.6; -0.5) | -2.7 (-4.5; -1.2) |
 
 Estimate in % with the 90 % interval in brackets ("open": no lower bound); controls: all other units with data in
@@ -332,7 +333,11 @@ whose data start in January 2016).
   With the test-control method's 4 % false-success rate at 52 weeks this is weak evidence of a small improvement
   (or of a pre-year that already contained degraded operation).
 * T5 in November 2021 has only four weeks of data after the event - enough to rule out a large loss, not more.
-* PV: roof A came back from its 34-day inverter failure as before. Roof B shows +1.0-1.2 % after 52 weeks with the
+* PV: roof A came back from its 34-day inverter failure as before. Roof B's 32 days in 2017 are a gap in the
+  inverter's data with error code 139, not a logged stop: no zero output was recorded in sun, so whether the roof
+  produced in between is unknown (the course of all three PV events is in the shared
+  [PVDAQ site notes](https://github.com/kwwaleszczynski-del/pv-outage-classifier/blob/main/PVDAQ_SITE_NOTES.md)).
+  After the gap it shows +1.0-1.2 % at 52 weeks with the
   gradient-boosting and test-control methods, but both have false-success rates above 30 % on this site at that
   window; synthetic control (+0.7 %, interval -0.6 to +0.9 %) sees no change. Inverter D1 had been losing about 9 %
   in the month before it failed (October 2017): BSTS reports +5.9 % [+0.2; +12.3] - the gain against that degraded
